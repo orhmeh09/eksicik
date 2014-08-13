@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+
+import eksicik
+import os
+import argparse
+
+abspath = os.path.dirname(os.path.abspath(__file__))
+
+entries = []
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-b', '--baslik', help='eksisozluk basligi', type=str)
+parser.add_argument('-o', '--output-file', default='default_out.xml',
+                    type=argparse.FileType('w'))
+args = parser.parse_args()
+
+# input file
+if args.baslik:
+    baslik = args.baslik
+    outputFileName = os.path.abspath(args.output_file.name)
+
+    entries = eksicik.getAllEntriesFromBaslik(baslik)
+
+    # Post process
+    outputFile = open(outputFileName, 'w')
+
+    for i in entries:
+        outputFile.write(str(i))
+        outputFile.write("\n")
+
+    outputFile.close()
+
+else:
+    parser.print_help()
