@@ -4,7 +4,8 @@ eksisozluk.com gereçleri
 
 ##### Yapabilecekleri
 
-- Bir başlıktaki tüm entryleri indirmek.
+- Bir başlıktaki tüm entryleri indirme.
+- JSON veya XML ciktisi verme.
 
 ##### Gerekli Paketler
 

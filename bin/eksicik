@@ -3,7 +3,6 @@
 import eksicik
 import os
 import argparse
-
 abspath = os.path.dirname(os.path.abspath(__file__))
 
 entries = []
@@ -16,14 +15,30 @@ parser.add_argument('-s', '--sayfa-araligi', help=
                     '''indirilecek sayfa araligi. ornek: "-s 1-10"
                     varolan sayfa sayisindan daha buyuk bir rakam girilirse
                     indirme islemi son sayfada duracaktir.''', type=str)
-parser.add_argument('-o', '--output-file', default='default_out.xml',
-                    type=argparse.FileType('w'))
+parser.add_argument('-o', '--output-file', help='cikti dosyasi', type=str)
+parser.add_argument('-v', '--verbose', action='store_true')
+parser.add_argument('-x', '--xml', help='output XML instead of the default JSON',
+                    action='store_true')
+# parser.add_argument('-j', '--json', help=
+#                     '''output JSON. This is the default.
+                    # Use with -x to output both XML and JSON''',
+                    # action='store_true')
+
 args = parser.parse_args()
+
+# if args.xml:
+    # eksicik.outputXml = True
 
 # input file
 if args.baslik:
     baslik = args.baslik
-    outputFileName = os.path.abspath(args.output_file.name)
+    if not args.output_file:
+        if args.xml:
+            outputFileName = 'default_out.xml'
+        else:
+            outputFileName = 'default_out.json'
+    else:
+        outputFileName = args.output_file
     sayfaAraligi = None
     if args.sayfa_araligi:
         sayfaAraligi = args.sayfa_araligi.split('-')
@@ -40,14 +55,20 @@ if args.baslik:
 
     entries = eksicik.getAllEntriesFromBaslik(baslik, sayfaAraligi=sayfaAraligi)
 
+    print("Indirilenler " + outputFileName + " dosyasina kaydediliyor")
     # Post process
     outputFile = open(outputFileName, 'w')
 
     for i in entries:
-        outputFile.write(str(i))
+        if args.xml:
+            outputFile.write(i.getXml())
+        else:
+            outputFile.write(i.getJson())
+
         outputFile.write("\n")
 
     outputFile.close()
 
+    print("Bit")
 else:
     parser.print_help()

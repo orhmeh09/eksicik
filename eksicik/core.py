@@ -3,28 +3,44 @@ from bs4 import BeautifulSoup
 import argparse
 import urllib2
 import datetime
+import json
 
 eksi_url = "https://eksisozluk.com/"
+# outputXml = False
 
 class Entry:
-    def __init__(self, comment = None, author = None, number = None, datetime=None):
+    def __init__(self, comment = None, baslik = None, author = None, number = None, datetime=None):
         self.comment = comment
         self.author = author
         self.number = number
         self.datetime = datetime
+        self.baslik = baslik
+
         # if not (self.datetime == None or isinstance(self.datetime, datetime.datetime)):
             # raise Exception("The date should be of type datetime.datetime")
-
-    def __str__(self):
+    def getXml(self):
         result = "<entry"
-        if self.datetime != None:
-            result += " date=\""+ str(self.datetime) +"\""
+        if self.baslik != None:
+            result += " baslik=\""+ self.baslik +"\""
         if self.author != None:
             result += " author=\""+ self.author +"\""
+        if self.datetime != None:
+            result += " datetime=\""+ str(self.datetime) +"\""
         result += ">"
         result += self.comment
         result += "</entry>"
         return result
+
+    def getJson(self):
+        return json.dumps({'baslik': self.baslik,
+                           'author': self.author,
+                           'datetime': str(self.datetime),
+                           'comment': self.comment},
+                          sort_keys=True,
+                          indent=4,
+                          encoding="utf-8",
+                          ensure_ascii=False,
+                          separators=(',', ': '))
 
 def getNumberOfPagesOfBaslik(baslik):
     baslik_url = eksi_url + baslik
@@ -53,6 +69,14 @@ def getEntriesFromUrl(url):
         result.append(Entry(comment=comment, author=author, datetime=datetimeObject))
     return result
 
+def getEntriesFromBaslikPage(baslik, page):
+    baslikUrl = eksi_url + baslik
+    pageUrl = baslikUrl + "?p=" + str(page)
+    result = getEntriesFromUrl(pageUrl)
+    for i in result:
+        i.baslik = baslik
+    return result
+
 def text_with_newlines(elem):
     text = ''
     for e in elem.recursiveChildGenerator():
@@ -64,7 +88,6 @@ def text_with_newlines(elem):
 
 def getAllEntriesFromBaslik(baslik, sayfaAraligi=None):
     result = []
-    baslik_url = eksi_url + baslik
     firstPage = 0
     numberOfPages = getNumberOfPagesOfBaslik(baslik)
 
@@ -75,7 +98,6 @@ def getAllEntriesFromBaslik(baslik, sayfaAraligi=None):
         lastPage = numberOfPages
 
     for n in range(firstPage, lastPage):
-        print(baslik+" -- page: "+str(n+1)+"/"+str(lastPage))
-        page_url = baslik_url + "?p=" + str(n+1)
-        result += getEntriesFromUrl(page_url)
+        print(baslik+" -- sayfa: "+str(n+1)+"/"+str(lastPage))
+        result += getEntriesFromBaslikPage(baslik, n+1)
     return result
