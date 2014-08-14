@@ -2,6 +2,10 @@
 
 eksisozluk.com gereçleri
 
+##### Yapabilecekleri
+
+- Bir başlıktaki tüm entryleri indirmek.
+
 ##### Gerekli Paketler
 
 - bs4 (Beautiful Soup 4)
@@ -25,3 +29,14 @@ Sisteminize kurabilmeniz için root olmanız gerekmektedir.
 
     cd eksicik
     sudo python setup.py install
+
+##### Çalıştırma
+
+Yardımı göstermek için `eksicik` betiğini argümansız çalıştırın.
+
+    $ eksicik
+    usage: eksicik [-h] [-b BASLIK] [-o OUTPUT_FILE]
+
+    optional arguments:
+      -h, --help            show this help message and exit
+    ....

@@ -62,13 +62,20 @@ def text_with_newlines(elem):
             text += '\n'
     return text
 
-def getAllEntriesFromBaslik(baslik):
+def getAllEntriesFromBaslik(baslik, sayfaAraligi=None):
     result = []
     baslik_url = eksi_url + baslik
+    firstPage = 0
     numberOfPages = getNumberOfPagesOfBaslik(baslik)
 
-    for n in range(numberOfPages):
-        print(baslik+" -- page: "+str(n+1)+"/"+str(numberOfPages))
+    if sayfaAraligi:
+        firstPage = min(sayfaAraligi[0]-1, numberOfPages)
+        lastPage = min(sayfaAraligi[1], numberOfPages)
+    else:
+        lastPage = numberOfPages
+
+    for n in range(firstPage, lastPage):
+        print(baslik+" -- page: "+str(n+1)+"/"+str(lastPage))
         page_url = baslik_url + "?p=" + str(n+1)
         result += getEntriesFromUrl(page_url)
     return result

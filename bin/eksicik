@@ -9,7 +9,13 @@ abspath = os.path.dirname(os.path.abspath(__file__))
 entries = []
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-b', '--baslik', help='eksisozluk basligi', type=str)
+parser.add_argument('-b', '--baslik', help=
+                    '''cekilecek eksisozluk basligi.
+                    urlde eksi sozluk linkinden sonra gelen kisim''', type=str)
+parser.add_argument('-s', '--sayfa-araligi', help=
+                    '''indirilecek sayfa araligi. ornek: "-s 1-10"
+                    varolan sayfa sayisindan daha buyuk bir rakam girilirse
+                    indirme islemi son sayfada duracaktir.''', type=str)
 parser.add_argument('-o', '--output-file', default='default_out.xml',
                     type=argparse.FileType('w'))
 args = parser.parse_args()
@@ -18,8 +24,21 @@ args = parser.parse_args()
 if args.baslik:
     baslik = args.baslik
     outputFileName = os.path.abspath(args.output_file.name)
+    sayfaAraligi = None
+    if args.sayfa_araligi:
+        sayfaAraligi = args.sayfa_araligi.split('-')
 
-    entries = eksicik.getAllEntriesFromBaslik(baslik)
+        for i,j in enumerate(sayfaAraligi):
+            sayfaAraligi[i] = int(j)
+
+        if len(sayfaAraligi) != 2:
+            raise Exception("Gecersiz sayfa araligi:" + args.sayfa_araligi)
+        elif sayfaAraligi[0] < 1:
+            raise Exception("Gecersiz baslangic sayfasi: " + str(sayfaAraligi[0]))
+        elif sayfaAraligi[1] < 1:
+            raise Exception("Gecersiz bitis sayfasi: " + str(sayfaAraligi[1]))
+
+    entries = eksicik.getAllEntriesFromBaslik(baslik, sayfaAraligi=sayfaAraligi)
 
     # Post process
     outputFile = open(outputFileName, 'w')
