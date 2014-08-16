@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 
 eksiUrl = "https://eksisozluk.com/"
 entryPerPage = 10
-
+idDelimiter = "--"
 # outputXml = False
 # /populer, /bugun
 class Entry:
@@ -61,37 +61,208 @@ class Entry:
                           sort_keys=False,
                           separators=(',', ': '))
 
-def getNumberOfPagesOfBaslik(baslik):
-    """Baslikta toplam kac adet sayfa oldugunu bul
+class Baslik:
+    def __init__(self, name = None, prettyName = None, id_=None, counter=None, wholePath=None):
+        self.name = name
+        self.prettyName = prettyName
+        self.id_ = id_
+        self.counter = counter
+        self.entries = []
+        self.numberOfPages = None
+        self.numberOfEntries = None
 
-    Arguments:
-    baslik -- baslik tanimlayici string
-    """
-    baslik_url = eksiUrl + baslik
-    firstPage = urllib2.urlopen(baslik_url)
-    html = firstPage.read()
+        if wholePath:
+            self.name = wholePath.rsplit('--',1)[0]
+            self.id_ = wholePath.rsplit('--',1)[1]
 
-    # print html
-    soup = BeautifulSoup(html)
-    return int(soup.find('div', class_='pager')['data-pagecount'])
+        if not self.id_ and not self.name:
+            raise Exception("Baslik does not have enough info for processing")
 
-def getNumberOfEntriesAndPagesOfBaslik(baslik):
-    """Baslikta toplam kac adet entry oldugunu bul
+    def getJson(self):
+        return json.dumps({'name': self.name,
+                           'prettyName': self.prettyName,
+                           'counter': self.counter,
+                           'id': self.id_},
+                          indent=4,
+                          encoding="utf-8",
+                          ensure_ascii=False,
+                          sort_keys=False,
+                          separators=(',', ': '))
 
-    Arguments:
-    baslik -- baslik tanimlayici string
-    """
-    numberOfPages = getNumberOfPagesOfBaslik(baslik)
-    lastPageUrl = eksiUrl + baslik + "?p=" + str(numberOfPages)
-    lastPage = urllib2.urlopen(lastPageUrl)
-    html = lastPage.read()
-    soup = BeautifulSoup(html)
-    result = int(soup.find('ol', id='entry-list').find_all('li')[-1].attrs['value'])
-    return result, numberOfPages
+    def getNumberOfPages(self):
+        url = eksiUrl + self.getPath()
+        firstPage = urllib2.urlopen(url)
+        html = firstPage.read()
 
-def getNumberOfEntriesOfBaslik(baslik):
-    a,b = getNumberOfEntriesAndPagesOfBaslik
-    return a
+        # print html
+        soup = BeautifulSoup(html)
+        self.numberOfPages = int(soup.find('div', class_='pager')['data-pagecount'])
+        return self.numberOfPages
+
+    def getPath(self):
+        return self.name + idDelimiter + str(self.id_)
+
+    def getNumberOfEntriesAndPages(self):
+        """Baslikta toplam kac adet entry oldugunu bul"""
+        self.getNumberOfPages()
+        lastPageUrl = eksiUrl + self.getPath() + "?p=" + str(self.numberOfPages)
+        lastPage = urllib2.urlopen(lastPageUrl)
+        html = lastPage.read()
+        soup = BeautifulSoup(html)
+        self.numberOfEntries = int(soup.find('ol', id='entry-list').find_all('li')[-1].attrs['value'])
+
+        return self.numberOfEntries, self.numberOfPages
+
+    def getNumberOfEntries(self):
+        self.getNumberOfEntriesAndPages()
+        return self.numberOfEntries
+
+    def getFinalAralik(self, aralik=None, aralikIsForPages=False):
+        global entryPerPage
+        firstEntry = 1
+        firstPage = 1
+        lastPage = 1
+        firstEntryCoordinateInPage = 1
+        lastEntryCoordinateInPage = entryPerPage
+
+        if not aralikIsForPages:
+            self.getNumberOfEntriesAndPages() # 2 requests
+            logging.info("Basliktaki toplam entry, toplam sayfa: "
+                         + str(self.numberOfEntries)+", "+str(self.numberOfPages))
+            if aralik:
+                firstEntry = min(aralik[0], self.numberOfEntries)
+                lastEntry = min(aralik[1], self.numberOfEntries)
+            else:
+                lastEntry = self.numberOfEntries
+            logging.info("Indirilecek entry araligi: "+str(firstEntry)+"-"+str(lastEntry))
+
+            firstPage,firstEntryCoordinateInPage,lastPage,lastEntryCoordinateInPage = calcPageAralikFromEntryAralik(firstEntry, lastEntry)
+        else:
+            self.getNumberOfPages() # 1 request
+            logging.info("Basliktaki toplam entry, toplam sayfa: "+str(self.numberOfPages))
+            if aralik:
+                firstPage = aralik[0]
+                lastPage = aralik[1]
+                if firstPage > self.numberOfPages:
+                    firstPage = self.numberOfPages
+                    firstEntryCoordinateInPage = entryPerPage + 1
+                # if lastPage > numberOfPages:
+                #     lastPage = numberOfPages
+                lastPage = min(aralik[1], self.numberOfPages)
+            else:
+                lastPage = self.numberOfPages
+
+            lastEntryCoordinateInPage = entryPerPage
+        return firstPage,firstEntryCoordinateInPage,lastPage,entryPerPage
+
+    def getAllEntries(self, aralik=None, aralikIsForPages=False):
+        """Basliktaki butun entryleri indir
+
+        Arguments:
+        aralik -- 2 ogeli int arrayi, ornek=[1,10]
+        aralikIsForPages -- aralik entry araligi mi, yoksa sayfa araligi mi
+        """
+        self.entries = []
+        logging.info("Getting all entries of: "+self.name)
+
+        firstPage,firstEntryCoordinateInPage,lastPage,lastEntryCoordinateInPage = self.getFinalAralik(aralik=aralik, aralikIsForPages=aralikIsForPages)
+
+        logging.info(str(firstPage)+" "+
+                     str(firstEntryCoordinateInPage)+" "+
+                     str(lastPage)+" "+str(entryPerPage))
+
+        for n in range(firstPage, lastPage+1):
+            if (firstPage-1)*entryPerPage + firstEntryCoordinateInPage > (lastPage-1)*entryPerPage + lastEntryCoordinateInPage:
+                break
+            logging.info(self.name+" -- sayfa: "+str(n)+"/"+str(lastPage))
+            entries = self.getEntriesFromPage(n)
+            if n == firstPage:
+                self.entries += entries[firstEntryCoordinateInPage-1:]
+            elif n == lastPage:
+                self.entries += entries[:lastEntryCoordinateInPage]
+            else:
+                self.entries += entries
+        return self.entries
+
+    def getEntriesFromPage(self, sayfa):
+        """Basliktan belli bir sayfayi cek
+
+        Arguments:
+        sayfa -- sayfa numarasi (1 den baslayan int)
+        """
+        url = eksiUrl + self.getPath()
+        sayfaUrl = url + "?p=" + str(sayfa)
+        result = getEntriesFromUrl(sayfaUrl)
+        return result
+
+
+class Liste:
+    def __init__(self, name=None):
+        self.name = name
+        self.basliks = []
+        self.numberOfPages = None
+
+    def getNumberOfPages(self):
+        url = eksiUrl + self.name
+        firstPage = urllib2.urlopen(url)
+        html = firstPage.read()
+
+        # print html
+        soup = BeautifulSoup(html)
+        self.numberOfPages = int(soup.find('div', class_='pager')['data-pagecount'])
+        return self.numberOfPages
+
+    def getBasliksFromPage(self, sayfa):
+        url = eksiUrl + self.name
+        sayfaUrl = url + "?p=" + str(sayfa)
+        result = getBasliksFromUrl(sayfaUrl)
+        return result
+
+    def getAllBasliks(self, aralik=None):
+        """Listedeki butun basliklari indir
+
+        Arguments:
+        aralik -- 2 ogeli int arrayi, ornek=[1,10]
+        """
+        self.basliks = []
+        self.getNumberOfPages()
+        firstPage,lastPage = 1, self.numberOfPages
+        if aralik:
+            lastPage = min(aralik[1], self.numberOfPages)
+            if firstPage > lastPage:
+                firstPage = lastPage + 1
+
+        for n in range(firstPage, lastPage+1):
+            logging.info(self.name+" -- sayfa: "+str(n)+"/"+str(lastPage))
+            if firstPage > lastPage:
+                break
+            basliks = self.getBasliksFromPage(n)
+            # for i in basliks: print(i.name)
+            self.basliks += basliks
+
+        return self.basliks
+
+    def getAllBaslikEntries(self):
+        if self.basliks == []:
+            self.getAllBasliks()
+        for i in self.basliks:
+            i.getAllEntries()
+
+def calcPageAralikFromEntryAralik(firstEntry, lastEntry):
+    firstPage = int(math.floor(float(firstEntry) / float(entryPerPage) + 1))
+    lastPage = int(math.floor(float(lastEntry) / float(entryPerPage) + 1))
+    firstEntryCoordinateInPage = firstEntry % entryPerPage
+    lastEntryCoordinateInPage = lastEntry % entryPerPage
+
+    if lastEntryCoordinateInPage == 0:
+        lastPage -= 1
+        lastEntryCoordinateInPage = entryPerPage
+    if firstEntryCoordinateInPage == 0:
+        firstPage -= 1
+        firstEntryCoordinateInPage = entryPerPage
+
+    return firstPage, firstEntryCoordinateInPage, lastPage, lastEntryCoordinateInPage
+
 
 def getEntriesFromUrl(url):
     """Verilen URL'den entryleri cek
@@ -131,19 +302,35 @@ def getEntriesFromUrl(url):
                             prettyBaslik = prettyBaslik))
     return result
 
-def getEntriesFromBaslikPage(baslik, sayfa):
-    """Basliktan belli bir sayfayi cek
 
-    Arguments:
-    baslik -- baslik tanimlayici string
-    sayfa -- sayfa numarasi (1 den baslayan int)
-    """
-    baslikUrl = eksiUrl + baslik
-    sayfaUrl = baslikUrl + "?p=" + str(sayfa)
-    result = getEntriesFromUrl(sayfaUrl)
-    # for i in result:
-    #     i.baslik = baslik
+def getBasliksFromUrl(url):
+    page = urllib2.urlopen(url)
+    html = page.read()
+    soup = BeautifulSoup(html)
+    result = []
+
+    for i in soup.find_all('ul', class_='topic-list')[-1].find_all('li'):
+        path = i.find('a').attrs['href']
+        # print("ASDASDASDASDASDASD\n"+str(i))
+        # import pdb; pdb.set_trace();
+        # print(i.find('a').attrs['class'])
+        if i.find('a').attrs['class'][0] == "sponsored":
+            continue
+
+        name = path[1:].rsplit('?', 1)[0].rsplit('--',1)[0]
+        id_ = path[1:].rsplit('?', 1)[0].rsplit('--',1)[1]
+        counter = None
+        if i.find('small'):
+            counter = int(i.find('small').getText().encode('utf-8').strip())
+            i.small.decompose()
+
+        prettyName = i.string.encode('utf-8').strip()
+        # path.rsplit('?', 1)
+        # print(id_)
+        result.append(Baslik(prettyName=prettyName, name=name, id_=id_, counter=counter))
+
     return result
+
 
 def textWithNewlines(elem):
     text = ''
@@ -153,84 +340,3 @@ def textWithNewlines(elem):
         elif e.name == 'br':
             text += '\n'
     return text
-
-def calcPageAralikFromEntryAralik(firstEntry, lastEntry):
-    firstPage = int(math.floor(float(firstEntry) / float(entryPerPage) + 1))
-    lastPage = int(math.floor(float(lastEntry) / float(entryPerPage) + 1))
-    firstEntryCoordinateInPage = firstEntry % entryPerPage
-    lastEntryCoordinateInPage = lastEntry % entryPerPage
-
-    if lastEntryCoordinateInPage == 0:
-        lastPage -= 1
-        lastEntryCoordinateInPage = entryPerPage
-    if firstEntryCoordinateInPage == 0:
-        firstPage -= 1
-        firstEntryCoordinateInPage = entryPerPage
-
-    return firstPage, firstEntryCoordinateInPage, lastPage, lastEntryCoordinateInPage
-
-def getFinalAralik(baslik, aralik=None, aralikIsForPages=False):
-    global entryPerPage
-    firstEntry = 1
-    firstPage = 1
-    lastPage = 1
-    firstEntryCoordinateInPage = 1
-    lastEntryCoordinateInPage = entryPerPage
-
-    logging.info("Basliktaki toplam entry, toplam sayfa: " + str(getNumberOfEntriesAndPagesOfBaslik(baslik)))
-
-    if not aralikIsForPages:
-        numberOfEntries, numberOfPages = getNumberOfEntriesAndPagesOfBaslik(baslik) # 2 request
-        if aralik:
-            firstEntry = min(aralik[0], numberOfEntries)
-            lastEntry = min(aralik[1], numberOfEntries)
-        else:
-            lastEntry = numberOfEntries
-        logging.info("Indirilecek entry araligi: "+str(firstEntry)+"-"+str(lastEntry))
-
-        firstPage,firstEntryCoordinateInPage,lastPage,lastEntryCoordinateInPage = calcPageAralikFromEntryAralik(firstEntry, lastEntry)
-    else:
-        numberOfPages = getNumberOfPagesOfBaslik(baslik) # 1 request
-        if aralik:
-            firstPage = aralik[0]
-            lastPage = aralik[1]
-            if firstPage > numberOfPages:
-                firstPage = numberOfPages
-                firstEntryCoordinateInPage = entryPerPage + 1
-            # if lastPage > numberOfPages:
-            #     lastPage = numberOfPages
-            lastPage = min(aralik[1], numberOfPages)
-        else:
-            lastPage = numberOfPages
-
-        lastEntryCoordinateInPage = entryPerPage
-    return firstPage,firstEntryCoordinateInPage,lastPage,entryPerPage
-
-
-def getAllEntriesFromBaslik(baslik, aralik=None, aralikIsForPages=False):
-    """Basliktaki butun entryleri indir
-
-    Arguments:
-    baslik -- baslik tanimlayici string
-    aralik -- 2 ogeli int arrayi, ornek=[1,10]
-    """
-    result = []
-
-    firstPage,firstEntryCoordinateInPage,lastPage,lastEntryCoordinateInPage = getFinalAralik(baslik, aralik=aralik, aralikIsForPages=aralikIsForPages)
-
-    logging.info(str(firstPage)+" "+
-                 str(firstEntryCoordinateInPage)+" "+
-                 str(lastPage)+" "+str(entryPerPage))
-
-    for n in range(firstPage, lastPage+1):
-        if (firstPage-1)*entryPerPage + firstEntryCoordinateInPage > (lastPage-1)*entryPerPage + lastEntryCoordinateInPage:
-            break
-        logging.info(baslik+" -- sayfa: "+str(n)+"/"+str(lastPage))
-        entries = getEntriesFromBaslikPage(baslik, n)
-        if n == firstPage:
-            result += entries[firstEntryCoordinateInPage-1:]
-        elif n == lastPage:
-            result += entries[:lastEntryCoordinateInPage]
-        else:
-            result += entries
-    return result

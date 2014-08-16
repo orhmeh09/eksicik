@@ -7,6 +7,7 @@ import argparse
 abspath = os.path.dirname(os.path.abspath(__file__))
 
 entries = []
+basliks = []
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-b', '--baslik', help=
@@ -17,9 +18,7 @@ parser.add_argument('-l', '--liste', help=
                     ornek: populer, bugun""", type=str)
 parser.add_argument('-a', '--aralik', help=
                     """indirilecek  aralik. ornek: "-a 1-10"
-                    basligin entryleri indiriliyor ise entry listesinin sinirlarini belirler.
-                    populer/bugun vb kategoriden yalnizca baslik cekiliyor ise baslik listesinin
-                    sinirlarini belirler.
+                    -b kullaniliyor ise entry listesinin sinirlarini belirler.
                     varolan sayfa sayisindan daha buyuk bir rakam girilirse
                     indirme islemi son sayfada duracaktir.""", type=str)
 parser.add_argument('-p', '--page-aralik', help=
@@ -29,7 +28,7 @@ parser.add_argument('-p', '--page-aralik', help=
 parser.add_argument('-o', '--output-file', help='cikti dosyasi', type=str)
 parser.add_argument('-s', '--silent', help='mesaj gosterme', action='store_true')
 parser.add_argument('-v', '--verbose', help='daha ayrintili mesaj goster', action='store_true')
-parser.add_argument('-x', '--xml', help='vasrayilan JSON yerine JSON ciktisi ver',
+parser.add_argument('-x', '--xml', help='varsayilan JSON yerine JSON ciktisi ver',
                     action='store_true')
 
 # parser.add_argument('-j', '--json', help=
@@ -42,33 +41,30 @@ args = parser.parse_args()
 # if args.xml:
     # eksicik.outputXml = True
 
+if not args.output_file:
+    outputFileName = None
+else:
+    outputFileName = args.output_file
+
+aralik = None
+if args.aralik:
+    aralik = args.aralik.split('-')
+
+    for i,j in enumerate(aralik):
+        aralik[i] = int(j)
+
+    if len(aralik) != 2:
+        raise Exception("Gecersiz sayfa araligi:" + args.aralik)
+    elif aralik[0] < 1:
+        raise Exception("Gecersiz baslangic sayfasi: " + str(aralik[0]))
+    elif aralik[1] < 1:
+        raise Exception("Gecersiz bitis sayfasi: " + str(aralik[1]))
+
 # input file
 if args.baslik:
     baslik = args.baslik
-    if not args.output_file:
-        outputFileName = None
-        # if args.xml:
-        #     outputFileName = 'default_out.xml'
-        # else:
-        #     outputFileName = 'default_out.json'
-    else:
-        outputFileName = args.output_file
-    aralik = None
-    if args.aralik:
-        aralik = args.aralik.split('-')
 
-        for i,j in enumerate(aralik):
-            aralik[i] = int(j)
-
-        if len(aralik) != 2:
-            raise Exception("Gecersiz sayfa araligi:" + args.aralik)
-        elif aralik[0] < 1:
-            raise Exception("Gecersiz baslangic sayfasi: " + str(aralik[0]))
-        elif aralik[1] < 1:
-            raise Exception("Gecersiz bitis sayfasi: " + str(aralik[1]))
-
-    entries = eksicik.getAllEntriesFromBaslik(baslik, aralik=aralik,
-                                              aralikIsForPages=args.page_aralik)
+    entries =  eksicik.Baslik(wholePath=baslik).getAllEntries(aralik=aralik, aralikIsForPages=args.page_aralik)
 
     # Post process
     if outputFileName:
@@ -78,6 +74,27 @@ if args.baslik:
         outputFile = sys.stdout
 
     for i in entries:
+        if args.xml:
+            outputFile.write(i.getXml())
+        else:
+            outputFile.write(i.getJson())
+
+        outputFile.write("\n")
+
+    outputFile.close()
+elif args.liste:
+    liste = args.liste
+
+    basliks = eksicik.Liste(name=liste).getAllBasliks(aralik)
+
+        # Post process
+    if outputFileName:
+        print("Indirilenler " + outputFileName + " dosyasina kaydediliyor")
+        outputFile = open(outputFileName, 'w')
+    else:
+        outputFile = sys.stdout
+
+    for i in basliks:
         if args.xml:
             outputFile.write(i.getXml())
         else:
