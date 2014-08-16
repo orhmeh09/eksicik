@@ -1,9 +1,12 @@
 # eksicik
 
-eksisozluk.com gereçleri
+eksisozluk.com gereçleri: **web arayüzü için API + betik**
 
-##### Yapabilecekleri
+##### Neler Neler...
 
+- Esnek Python API'ı.
+- Kısa kullanım için [filtre program](https://en.wikipedia.org/wiki/Filter_(software)) betiği.
+- Popüler veya bugün gibi listelerdeki başlıkları indirme.
 - Bir başlıktaki tüm entryleri indirme.
 - JSON veya XML ciktisi verme.
 
